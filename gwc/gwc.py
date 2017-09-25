@@ -13,7 +13,9 @@ from owslib.wms import WebMapService
 from owslib.util import ServiceException
 
 from datetime import datetime, timedelta
-from dateutil import parser
+import dateutil
+import pendulum
+
 try:
     from urllib.parse import urlparse  # Python 3
 except ImportError:
@@ -26,6 +28,7 @@ NC_LAYERINFO_DEF_REQUEST = "timestops"
 NC_LAYERINFO_DEF_SERVICE = "radar_meteo_imagery_nexrad_time"
 NC_LAYERINFO_DEF_FORMAT = "json"
 WMS_URL = "http://localhost.kachina:8070/geoserver/wms?"
+TIME_OUTPUT_FMT = "rfc3339"
 OUTPUT = "gwc.out"
 LOG = "gwc.log"
 
@@ -71,6 +74,10 @@ def main():
     parser.add_argument('--wms_layer', type=str, required=False,
                         help='The id of the WMS layer we will query to discover available time values')
 
+    parser.add_argument('--time_output_fmt', type=str, choices=set(("rfc3339", "iso8601")), default=TIME_OUTPUT_FMT, required=False,
+                        help='Timestamp output format.  One of \'rfc3339\' or \'iso8601\' Default: {time_output_fmt}'.format(
+                            time_output_fmt=TIME_OUTPUT_FMT))
+
     parser.add_argument('-o', '--output', type=str, required=False, default=OUTPUT,
                         help='Output filename (path to a file to output results to).  Default: {out}'.format(out=OUTPUT))
 
@@ -88,6 +95,15 @@ def main():
         print("Unable to write output file: {file}".format(file=filename))
         exit(1)
 
+    # set the output format we'll use to write date strings:
+    if args.time_output_fmt == "rfc3339":
+        time_output_fmt = "%Y-%m-%dT%H:%M:%S.%fZ"
+    elif args.time_output_fmt == "iso8601":
+        time_output_fmt = "%Y-%m-%dT%H:%M:%S"
+    else:
+        time_output_fmt = "%Y-%m-%dT%H:%M:%S"
+
+
     ##############################################
     # query the GWC REST API:
     ##############################################
@@ -104,26 +120,38 @@ def main():
     ##############################################
     # query the NC LayerInfo Service or WMS:
     ##############################################
+    # timestops will hold the source service's time values:
+    timestops = []
+
+    # if a 'wms_url' parameter was passed, we'll use that.  Otherwise, use the NC LayerInfo servlet URL
     if args.wms_url is not None:
         url = args.wms_url
         try:
             wms = WebMapService(url, version='1.3.0')
-        except ServiceException as e:
+        except Exception as e:
+            print("WMS URL: {url} is not 1.3.0 compliant, falling back to 1.1.1.  Err: {err}".format(url=args.wms_url, err=e))
             if logger:
                 logger.info("WMS URL: {url} is not 1.3.0 compliant, falling back to 1.1.1.  Err: {err}".format(url=args.wms_url, err=e))
             try:
                 wms = WebMapService(url, version='1.1.1')
-            except ServiceException as e:
+            except Exception as e:
+                print("WMS URL: {url} is not 1.3.0 or 1.1.1 compliant.  Err: {err}".format(url=args.wms_url, err=e))
                 if logger:
-                    logger.info("WMS URL: {url} is not 1.3.0 or 1.1.1 compliant.  Err: {err}".format(err=e))
+                    logger.info("WMS URL: {url} is not 1.3.0 or 1.1.1 compliant.  Err: {err}".format(url=args.wms_url, err=e))
                 exit(code=2)
         print(wms.identification.type)
+        print(list(wms.contents))
 
         if args.wms_layer is not None:
             if args.wms_layer in wms.contents:
-                timepositions = wms.contents[args.wms_layer].timepositions
-                print(timepositions)
-                timestops = timepositions
+                print("OWSLib timepositions:")
+                for timeposition in wms.contents[args.wms_layer].timepositions:
+                    print(timeposition)
+                    # timestops.append(datetime.strptime(timeposition, "%Y-%m-%dT%H:%M:%S.%f%z"))
+                    # timestops.append(datetime.strptime(timeposition, "%Y-%m-%dT%H:%M:%S.%f%z"))
+                    timestops.append(dateutil.parser.parse(timeposition))
+                    #timestops.append(pendulum.parse(timeposition))
+
 
     else:
         url = args.nc_layerinfo_url
@@ -141,13 +169,13 @@ def main():
         #out.write(json.dumps(nc_layerinfo_json, indent=4) + "\n")
 
 
-    for i, stop in enumerate(timestops):
-        #timestops[i] = datetime.utcfromtimestamp(stop/1000).isoformat()
-        timestops[i] = datetime.utcfromtimestamp(stop / 1000)
-    #print(json.dumps(timestops, indent=4))
-    #out.write(json.dumps(timestops, indent=4) + "\n")
-    #print("type:" + str(type(timestops)))
-    #print(timestops)
+        for i, stop in enumerate(timestops):
+            #timestops[i] = datetime.utcfromtimestamp(stop/1000).isoformat()
+            timestops[i] = datetime.utcfromtimestamp(stop / 1000)
+        #print(json.dumps(timestops, indent=4))
+        #out.write(json.dumps(timestops, indent=4) + "\n")
+        #print("type:" + str(type(timestops)))
+        #print(timestops)
 
 
     ##############################################
@@ -185,7 +213,10 @@ def main():
         # use with date formats like: 2017-09-06T13:00:00.000Z
         #gwc_filter_times.append(datetime.strptime(child.text.replace('Z', '+0000'), "%Y-%m-%dT%H:%M:%S.%f%z"))
         # use with date formats like: 2017-09-12T11:44:00
-        gwc_filter_times.append(datetime.strptime(child.text, "%Y-%m-%dT%H:%M:%S"))
+        #gwc_filter_times.append(datetime.strptime(child.text, "%Y-%m-%dT%H:%M:%S"))
+
+        # Try dateutil parser for more universal support... (2017-09-06T13:00:00.000Z, 2017-09-12T11:44:00)
+        gwc_filter_times.append(dateutil.parser.parse(child.text))
 
     # debug: print gwc_filter_times:
     #print(gwc_filter_times)
@@ -194,11 +225,12 @@ def main():
     timestop_add = []
     for timestop in timestops:
         if timestop not in gwc_filter_times:
-            print("Eureka, I found a missing timestop: {date}".format(date=timestop.isoformat()))
+
+            print("Eureka, I found a missing timestop: {date}".format(date=timestop.strftime(time_output_fmt)))
             timestop_add.append(timestop)
 
             #add new 'string' subelements:
-            time_values.append(etree.fromstring("<string>{date}</string>".format(date=timestop.isoformat())))
+            time_values.append(etree.fromstring("<string>{date}</string>".format(date=timestop.strftime(time_output_fmt))))
             print(len(list(time_values)))
 
     # gwc_time_remove: list of existing time parameter filters that are no longer valid, used for cache truncation later
@@ -207,7 +239,7 @@ def main():
     gwc_time_remain = list(gwc_filter_times)
     for gwc_filter_time in gwc_filter_times:
         if gwc_filter_time not in timestops:
-            print("Eureka, I found a missing gwc_filter_time: {date}".format(date=gwc_filter_time.isoformat()))
+            print("Eureka, I found a missing timestop: {date}".format(date=timestop.strftime(time_output_fmt)))
             gwc_time_remove.append(gwc_filter_time)
 
             # remove the expired time from the gwc_time_remain list also (need current list to calculate defaultValue):
@@ -215,6 +247,8 @@ def main():
 
             # iterate over the <string> elements
             for child in time_values.iter("string"):
+
+                #ToDo: going to have to compare datetime objects here, not strings, as they'll differ slightly for rfc388:
                 if child.text == gwc_filter_time.strftime("%Y-%m-%dT%H:%M:%S"):
                     print("Match: " + child.text)
                     time_values.remove(child)
@@ -224,10 +258,11 @@ def main():
     # set the defaultValue to be latest time:
     final_valid_times = gwc_time_remain + timestop_add
     final_valid_times.sort(reverse=True)
-    time_value_default.text = final_valid_times[0].isoformat()
+    time_value_default.text = final_valid_times[0].strftime(time_output_fmt)
+
     print("final_valid_times:")
     for time_value in final_valid_times:
-        print(time_value.isoformat())
+        print(time_value.strftime(time_output_fmt))
 
 
     # debug: print the resulting XML to stdout for debug:
@@ -384,8 +419,9 @@ def main():
             data['seedRequest']['name'] = args.layer_id
             data['seedRequest']['srs']['number'] = 4326
             data['seedRequest']['bounds']['coords']['double'] = grid_subsets['EPSG:4326']
-            data['seedRequest']['parameters']['entry'][0]['string'][1] = gwc_time.isoformat()
-            print("Truncate request json for time: {time}".format(time=gwc_time.isoformat()))
+            data['seedRequest']['parameters']['entry'][0]['string'][1] = gwc_time.strftime(time_output_fmt)
+
+            print("Truncate request json for time: {time}".format(time=gwc_time.strftime(time_output_fmt)))
             print(data)
             if logger:
                 logger.info("Truncating GWC layer: {layer}, timestop: {stop}.  URL: {url}.".format(layer=args.layer_id,
@@ -429,24 +465,37 @@ def main():
             "Seeding GWC default cache for layer: {layer}. URL: {url}.".format(layer=args.layer_id, url=url))
         rest_seed_truncate(url, "post", data)
 
-    # next, we want to seed any newly added timestops in their own time filter cache:
-    for timestop in timestop_add[:1]:
-    #for timestop in timestops[:1]:
-    #for timestop in timestop_add[]:
+    if True:
+        # next, we want to seed any newly added timestops in their own time filter cache:
+        for timestop in timestop_add[:1]:
+        #for timestop in timestops[:1]:
+        #for timestop in timestop_add[]:
 
-        data = seed_template_bbox_time
-        data['seedRequest']['name'] = args.layer_id
-        data['seedRequest']['srs']['number'] = 4326
-        data['seedRequest']['bounds']['coords']['double'] = grid_subsets['EPSG:4326']
-        data['seedRequest']['zoomStart'] = 1
-        data['seedRequest']['zoomStop'] = 5
-        data['seedRequest']['parameters']['entry'][0]['string'][1] = timestop.isoformat()
-        print("Seed request json for time: {time}".format(time=timestop.isoformat()))
-        print(data)
-        if logger: logger.info(
-            "Seeding GWC layer: {layer}, timestop: {stop}.  URL: {url}.".format(layer=args.layer_id, stop=timestop,
-                                                                                url=url))
-        rest_seed_truncate(url, "post", data)
+            data = seed_template_bbox_time
+            data['seedRequest']['name'] = args.layer_id
+            data['seedRequest']['srs']['number'] = 4326
+            data['seedRequest']['bounds']['coords']['double'] = grid_subsets['EPSG:4326']
+            data['seedRequest']['zoomStart'] = 1
+            data['seedRequest']['zoomStop'] = 5
+            data['seedRequest']['parameters']['entry'][0]['string'][1] = timestop.strftime(time_output_fmt)
+
+            print("Seed request json for time: {time}".format(time=timestop.strftime(time_output_fmt)))
+            print(data)
+            if logger: logger.info(
+                "Seeding GWC layer: {layer}, timestop: {stop}.  URL: {url}.".format(layer=args.layer_id, stop=timestop,
+                                                                                    url=url))
+            rest_seed_truncate(url, "post", data)
+
+    # just check the seeding status to know if it's completed
+    while True:
+        # response should look like:
+        #   running task: {"long-array-array":[[-1,-1,-2,314,2]]}
+        #   no tasks: {"long-array-array":[]}
+        r = rest_seed_truncate(url, "get")
+        truncate_status = r.json()
+        if not truncate_status['long-array-array']:
+            break
+        time.sleep(3)
 
 
 def rest_seed_truncate(url, method, data=None):
