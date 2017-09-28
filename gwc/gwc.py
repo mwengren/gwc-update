@@ -10,11 +10,10 @@ import logging
 import requests
 from lxml import etree
 from owslib.wms import WebMapService
-from owslib.util import ServiceException
 
 from datetime import datetime, timedelta
 import dateutil
-import pendulum
+#import pendulum
 
 try:
     from urllib.parse import urlparse  # Python 3
@@ -95,7 +94,7 @@ def main():
         print("Unable to write output file: {file}".format(file=filename))
         exit(1)
 
-    # set the output format we'll use to write date strings:
+    # set the output format we'll use to write date strings 'iso8601' or 'rfc3339':
     if args.time_output_fmt == "rfc3339":
         time_output_fmt = "%Y-%m-%dT%H:%M:%S.%fZ"
     elif args.time_output_fmt == "iso8601":
@@ -148,7 +147,6 @@ def main():
                 for timeposition in wms.contents[args.wms_layer].timepositions:
                     print(timeposition)
                     # timestops.append(datetime.strptime(timeposition, "%Y-%m-%dT%H:%M:%S.%f%z"))
-                    # timestops.append(datetime.strptime(timeposition, "%Y-%m-%dT%H:%M:%S.%f%z"))
                     timestops.append(dateutil.parser.parse(timeposition))
                     #timestops.append(pendulum.parse(timeposition))
 
@@ -168,14 +166,8 @@ def main():
         #print(json.dumps(nc_layerinfo_json, indent=4))
         #out.write(json.dumps(nc_layerinfo_json, indent=4) + "\n")
 
-
         for i, stop in enumerate(timestops):
-            #timestops[i] = datetime.utcfromtimestamp(stop/1000).isoformat()
             timestops[i] = datetime.utcfromtimestamp(stop / 1000)
-        #print(json.dumps(timestops, indent=4))
-        #out.write(json.dumps(timestops, indent=4) + "\n")
-        #print("type:" + str(type(timestops)))
-        #print(timestops)
 
 
     ##############################################
@@ -226,7 +218,7 @@ def main():
     for timestop in timestops:
         if timestop not in gwc_filter_times:
 
-            print("Eureka, I found a missing timestop: {date}".format(date=timestop.strftime(time_output_fmt)))
+            print("New timestop from WMS added to GWC parameter filter list: {date}".format(date=timestop.strftime(time_output_fmt)))
             timestop_add.append(timestop)
 
             #add new 'string' subelements:
@@ -239,18 +231,16 @@ def main():
     gwc_time_remain = list(gwc_filter_times)
     for gwc_filter_time in gwc_filter_times:
         if gwc_filter_time not in timestops:
-            print("Eureka, I found a missing timestop: {date}".format(date=timestop.strftime(time_output_fmt)))
+            print("GWC time parameter filter expired: {date}".format(date=gwc_filter_time.strftime(time_output_fmt)))
             gwc_time_remove.append(gwc_filter_time)
 
             # remove the expired time from the gwc_time_remain list also (need current list to calculate defaultValue):
             gwc_time_remain.remove(gwc_filter_time)
 
-            # iterate over the <string> elements
+            # iterate over the <string> XML config elements to identify those to remove:
             for child in time_values.iter("string"):
-
-                #ToDo: going to have to compare datetime objects here, not strings, as they'll differ slightly for rfc388:
-                if child.text == gwc_filter_time.strftime("%Y-%m-%dT%H:%M:%S"):
-                    print("Match: " + child.text)
+                if dateutil.parser.parse(child.text) == gwc_filter_time:
+                    #print("Match: " + child.text)
                     time_values.remove(child)
 
             print(len(list(time_values)))
@@ -407,9 +397,10 @@ def main():
     rest_seed_truncate(url, "post", data)
 
     # truncate expired time parameter filter caches:
-    #for gwc_time in gwc_time_remove:
+    print(gwc_time_remove)
     if True:
         for gwc_time in gwc_time_remove[:1]:
+        # for gwc_time in gwc_time_remove:
         # for gwc_time in gwc_filter_times[-1:]:
         # for gwc_time in gwc_filter_times[:1]:
         # test clearing the same cache just seeded to troubleshoot:
@@ -429,7 +420,7 @@ def main():
             rest_seed_truncate(url, "post", data)
 
     # wait until we know truncate has completed before starting seeding
-    # (mostly due to 'default' time cache needing to be re-seeded on each update - must be fully truncated first):
+    # (mostly due to 'default' time cache needing to be re-seeded on each update - cache must be fully truncated first):
     status_url = ("/").join([args.gwc_rest_url, "seed", args.layer_id]) + ".json"
     while True:
         # response should look like:
