@@ -122,7 +122,7 @@ def main():
     # timestops will hold the source service's time values:
     timestops = []
 
-    # if a 'wms_url' parameter was passed, we'll use that.  Otherwise, use the NC LayerInfo servlet URL
+    # if a 'wms_url' parameter was passed, we'll use that:
     if args.wms_url is not None:
         url = args.wms_url
         try:
@@ -150,7 +150,7 @@ def main():
                     timestops.append(dateutil.parser.parse(timeposition))
                     #timestops.append(pendulum.parse(timeposition))
 
-
+    # otherwise, use the LayerInfo Servlet to query for new time stops:
     else:
         url = args.nc_layerinfo_url
         payload = {'request': 'timestops', 'service': args.nc_service, 'layers': args.nc_layers, 'format': args.nc_fmt}
@@ -397,7 +397,7 @@ def main():
     rest_seed_truncate(url, "post", data)
 
     # truncate expired time parameter filter caches:
-    print(gwc_time_remove)
+    #print(gwc_time_remove)
     if True:
         for gwc_time in gwc_time_remove[:1]:
         # for gwc_time in gwc_time_remove:
@@ -457,10 +457,10 @@ def main():
         rest_seed_truncate(url, "post", data)
 
     if True:
+        timestop_add.sort(reverse=True)
         # next, we want to seed any newly added timestops in their own time filter cache:
         for timestop in timestop_add[:1]:
-        #for timestop in timestops[:1]:
-        #for timestop in timestop_add[]:
+        #for timestop in timestop_add[]]:
 
             data = seed_template_bbox_time
             data['seedRequest']['name'] = args.layer_id
