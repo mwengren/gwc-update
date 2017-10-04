@@ -1,57 +1,47 @@
-### catalog-query ###
+### gwc_update ###
+Python client to use to manage GeoWebCache time filter parameter synchronization with source WMS data services.  'gwc'
+is designed to query the source WMS for explicit time dimension values (a list of valid time steps), in both iso8601
+compatible formats and RFC3339 (default used by GeoServer).  It also is able to query and parse the custom 'LayerInfoServlet'
+developed for the [nowcoast](https://nowcoast.noaa.gov) project that it was written to support.  More info about the
+nowCOAST LayerInfo Servlet is available [here](https://nowcoast.noaa.gov/help/#!section=layerinfo).
 
-A simple Python module to extract information about datasets in a CKAN catalog, via the CKAN API.
-Not to be confused with [ckanapi](https://github.com/ckan/ckanapi) which is probably much better.
 
-This was just created as a simple way to get some information from the [IOOS Data Catalog](https://data.ioos.us).
-
-catalog-query includes some IOOS-specific add ons (or scientific data management add ons more precisely) including
-the ability to run [Compliance Checker](https://github.com/ioos/compliance-checker) against OPeNDAP endpoints
-using the -resource_cc_check action.
-
-catalog-query can be easily extended by writing additional Action classes, better ones no doubt than the two already present...
-See Usage section below for more details.
-
-### Requirements ###
-Currently this module works with Python 2.7 only due to the way the action classes are loaded via ```importlib.import_module```.
-Looking for a way to do this in a Python 3-compatible way.
-
-#### Installation: ####
+### Installation ###
 ```
-git clone https://github.com/mwengren/catalog-query.git
-cd catalog-query
+git clone https://github.com/mwengren/gwc_update.git
+cd gwc_update
 python setup.py install
-```
-
-#### Usage: ####
-```
-# generate a list of datasets belonging to the 'NANOOS' Organization:
-catalog-query -c https://data.ioos.us/api/3 -a dataset_list -q=name:NANOOS
-
-# run Compliance Checker against all resources of format 'OPeNDAP' belonging to NANOOS, and output to the file 'nanoos_opendap_compliance_results.csv'
-catalog-query -c https://data.ioos.us/api/3 -a resource_cc_check -q=name:NANOOS,resource_format:OPeNDAP -o nanoos_opendap_compliance_results.csv
-
-# run Compliance Checker against all resources of format 'ERDDAP' with resource_name 'OPeNDAP' belonging to NANOOS,
-# and output to the file 'nanoos_opendap_compliance_results.csv'.  This is how to extract only the ERDDAP OPeNDAP URLs from IOOS catalog.
-catalog-query -c https://data.ioos.us/api/3 -a resource_cc_check -q=name:NANOOS,resource_format:ERDDAP,resource_name:OPeNDAP -o nanoos_erddap_compliance_results.csv
 ```
 
 
 Parameters:
 
 ```
--c | --catalog_api_url : The URL to the CKAN API endpoint (default: 'http://data.ioos.us/api/3')
+  -l LAYER_ID, --layer_id LAYER_ID:     GWC layer ID (REST API) to update
+  --gwc_rest_url GWC_REST_URL:          GWC REST API URL. Default:  http://localhost:8080/geowebcache/rest
+  --nc_layerinfo_url NC_LAYERINFO_URL:  nowCOAST LayerInfo service URL. Default:  https://nowcoast.noaa.gov/layerinfo
+  --nc_layers NC_LAYERS:                Comma separated list of layer(s) in the nowCOAST service to query
+  --nc_req NC_REQ:                      nowCOAST LayerInfo service request type. Default: timestops
+  --nc_service NC_SERVICE:              nowCOAST LayerInfo service REST service name to query. Default: radar_meteo_imagery_nexrad_time
+  --nc_fmt NC_FMT:                      nowCOAST LayerInfo service output format. Default: json
+  --wms_url WMS_URL:                    WMS URL to parse. Specify this to use instead of the NC LayerInfo Servlet
+  --wms_layer WMS_LAYER:                The id of the WMS layer we will query to discover available time values
+  --time_output_fmt {iso8601,rfc3339}:  Timestamp output format. One of 'rfc3339' or 'iso8601'.  Default: rfc3339
+  -o OUTPUT, --output OUTPUT:           Output filename (path to a file to output results to). Default: gwc.out
 
--a | --action : The name of the catalog-query Action to execute.  
+```
 
--o | --output : The name an output file to write results to (CSV format for all actions currently).  Will default to a
-        CSV file in a subdirectory of the CKAN Organization name with the action name and a randomized string suffix.
 
--q | --query_params : Query parameter value(s) to pass to the query action.  Multiple query parameters needed for actions
-        that expect multiple parameters can be passed as a comma separated string (eg. \'-q=name:AOOS,format:OPeNDAP or
-        -q=name:NANOOS,resource_format:ERDDAP,resource_name:OPeNDAP)\' to run AOOS OPeNDAP services through the Compliance Checker test).
 
--t | --cc_tests : Compliance checker tests to run (by name, comma-separated) (eg -t=acdd:1.3,cf:1.6,ioos), for use with the
-        'resource_cc_check' Action.  Consult the [Compliance Checker documentation](https://github.com/ioos/compliance-checker)
-        for and explanation of the tests available.  
+
+#### Usage: ####
+```
+# Update the GeoWebCache layer 'nexrad_reflectivity' with the timestop values for layer '1' of the nowCOAST service
+# 'radar_meteo_imagery_nexrad_time' using the nowCOAST LayerInfo Servlet
+gwc -l nexrad_reflectivity --nc_layers 1 --nc_service radar_meteo_imagery_nexrad_time --gwc_rest_url http://34.201.47.185/geowebcache/rest  --time_output_fmt iso8601
+
+# Update the GeoWebCache layer 'nowCOAST_Geo:ndfd_wind' with the time dimension values for the WMS layer of the same name from WMS
+# service 'http://localhost:8070/geoserver/wms?' using time format RFC3339 for the GeoWebCache output time filter values
+gwc -l nowCOAST_Geo:ndfd_wind --gwc_rest_url http://localhost:8090/geowebcache/rest --wms_url http://localhost:8070/geoserver/wms? --wms_layer nowCOAST_Geo:ndfd_wind --time_output_fmt rfc3339
+
 ```

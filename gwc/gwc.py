@@ -20,8 +20,7 @@ try:
 except ImportError:
     from urlparse import urlparse  # Python 2
 
-#GWC_REST_URL = "http://localhost:8090/geowebcache/rest"
-GWC_REST_URL = "http://172.17.0.4:8080/geowebcache/rest"
+GWC_REST_URL = "http://localhost:8080/geowebcache/rest"
 NC_LAYERINFO_URL = "https://nowcoast.noaa.gov/layerinfo"
 NC_LAYERINFO_DEF_REQUEST = "timestops"
 NC_LAYERINFO_DEF_SERVICE = "radar_meteo_imagery_nexrad_time"
@@ -306,8 +305,8 @@ def main():
             "name":"topp:states",
             "bounds": {"coords": {"double": ["-180", "-90", "180", "90"]}},
             "srs": {"number": 4326},
-            "zoomStart": 1,
-            "zoomStop": 7,
+            "zoomStart": 0,
+            "zoomStop": 20,
             "format": "image/png",
             "type": "truncate",
             "threadCount": 1,
@@ -325,8 +324,8 @@ def main():
             "name": "topp:states",
             "bounds": {"coords": {"double": ["-180", "-90", "180", "90"]}},
             "srs": {"number": 4326},
-            "zoomStart": 1,
-            "zoomStop": 7,
+            "zoomStart": 0,
+            "zoomStop": 20,
             "format": "image/png",
             "type": "truncate",
             "threadCount": 1
@@ -338,7 +337,7 @@ def main():
             "name": "topp:states",
             "bounds": {"coords": {"double": ["-180", "-90", "180", "90"]}},
             "srs": {"number": 4326},
-            "zoomStart": 1,
+            "zoomStart": 0,
             "zoomStop": 7,
             "format": "image/png",
             "type": "seed",
@@ -351,7 +350,7 @@ def main():
             "name": "topp:states",
             "bounds": {"coords": {"double": ["-180", "-90", "180", "90"]}},
             "srs": {"number": 4326},
-            "zoomStart": 1,
+            "zoomStart": 0,
             "zoomStop": 7,
             "format": "image/png",
             "type": "seed",
