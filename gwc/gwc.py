@@ -447,7 +447,7 @@ def main():
         data['seedRequest']['name'] = args.layer_id
         data['seedRequest']['srs']['number'] = 4326
         data['seedRequest']['bounds']['coords']['double'] = grid_subsets['EPSG:4326']
-        data['seedRequest']['zoomStart'] = 1
+        data['seedRequest']['zoomStart'] = 0
         data['seedRequest']['zoomStop'] = 5
         print("Seed request (default cache) json:")
         print(data)
@@ -465,7 +465,7 @@ def main():
             data['seedRequest']['name'] = args.layer_id
             data['seedRequest']['srs']['number'] = 4326
             data['seedRequest']['bounds']['coords']['double'] = grid_subsets['EPSG:4326']
-            data['seedRequest']['zoomStart'] = 1
+            data['seedRequest']['zoomStart'] = 0
             data['seedRequest']['zoomStop'] = 5
             data['seedRequest']['parameters']['entry'][0]['string'][1] = timestop.strftime(time_output_fmt)
 
